@@ -91,6 +91,9 @@ bot.catch((err) => {
   console.error('Bot encountered an error', err);
 });
 
+const port = Number(process.env.PORT ?? 3000);
+const useWebhook = process.env.USE_WEBHOOK === 'true';
+
 const app = express();
 app.use(express.json());
 
@@ -98,24 +101,23 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-const webhookPath = `/webhook/${bot.token}`;
-app.post(webhookPath, webhookCallback(bot, 'express'));
-
-const port = Number(process.env.PORT ?? 3000);
-const useWebhook = process.env.USE_WEBHOOK === 'true';
+let webhookPath: string | undefined;
+if (useWebhook) {
+  webhookPath = `/webhook/${bot.token}`;
+  app.post(webhookPath, webhookCallback(bot, 'express'));
+}
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
   if (useWebhook) {
     console.log(`Webhook endpoint ready at ${webhookPath}`);
+    console.log('Webhook mode enabled. Remember to register the webhook with Telegram.');
   } else {
     console.log('Running in long polling mode');
   }
 });
 
-if (useWebhook) {
-  console.log('Webhook mode enabled. Remember to register the webhook with Telegram.');
-} else {
+if (!useWebhook) {
   bot
     .api.deleteWebhook({ drop_pending_updates: true })
     .then(() =>
