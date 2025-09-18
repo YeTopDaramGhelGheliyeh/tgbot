@@ -1,5 +1,6 @@
 import { Composer } from 'grammy';
 
+import { logger } from '../lib/logger';
 import { BotContext } from '../types/session.context';
 
 const helpMessage = [
@@ -13,6 +14,10 @@ const helpMessage = [
 
 export function registerHelpCommand(composer: Composer<BotContext>) {
   composer.command('help', async (ctx) => {
+    logger.debug('Received /help command', {
+      chatId: ctx.chat?.id,
+      userId: ctx.from?.id,
+    });
     await ctx.reply(helpMessage);
   });
 }
