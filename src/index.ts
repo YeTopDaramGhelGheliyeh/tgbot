@@ -1,20 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
-import {
-  Bot,
-  Composer,
-  Context,
-  InlineKeyboard,
-  SessionFlavor,
-  session,
-  webhookCallback,
-} from 'grammy';
+import { Bot, session, webhookCallback } from 'grammy';
 
-interface SessionData {
-  clickCount: number;
-}
-
-type BotContext = Context & SessionFlavor<SessionData>;
+import { createBotComposer } from './composer';
+import { BotContext, SessionData } from './types/session.context';
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -32,60 +21,7 @@ bot.use(
   }),
 );
 
-const composer = new Composer<BotContext>();
-
-const createCounterKeyboard = () =>
-  new InlineKeyboard().text('Increment', 'increment').row().text('Reset', 'reset');
-
-const renderCounter = (count: number) =>
-  `You have pressed the button ${count} time${count === 1 ? '' : 's'}.`;
-
-async function updateCounterMessage(ctx: BotContext) {
-  const text = renderCounter(ctx.session.clickCount);
-  try {
-    if (ctx.callbackQuery?.message) {
-      await ctx.editMessageText(text, {
-        reply_markup: createCounterKeyboard(),
-      });
-    } else {
-      await ctx.reply(text, {
-        reply_markup: createCounterKeyboard(),
-      });
-    }
-  } catch (error) {
-    console.error('Failed to update counter message', error);
-    if (ctx.callbackQuery?.message) {
-      await ctx.reply(text, {
-        reply_markup: createCounterKeyboard(),
-      });
-    }
-  }
-}
-
-composer.callbackQuery('increment', async (ctx) => {
-  ctx.session.clickCount += 1;
-  await ctx.answerCallbackQuery();
-  await updateCounterMessage(ctx);
-});
-
-composer.callbackQuery('reset', async (ctx) => {
-  ctx.session.clickCount = 0;
-  await ctx.answerCallbackQuery({ text: 'Counter reset' });
-  await updateCounterMessage(ctx);
-});
-
-composer.on('callback_query:data', async (ctx) => {
-  await ctx.answerCallbackQuery({ text: 'Unknown action', show_alert: true });
-});
-
-bot.use(composer);
-
-bot.command('start', async (ctx) => {
-  ctx.session.clickCount = 0;
-  await ctx.reply('Welcome! Use the buttons below.', {
-    reply_markup: createCounterKeyboard(),
-  });
-});
+bot.use(createBotComposer());
 
 bot.catch((err) => {
   console.error('Bot encountered an error', err);
