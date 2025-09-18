@@ -6,7 +6,7 @@ import { createCounterKeyboard } from './counter.helpers';
 export function registerStartCommand(composer: Composer<BotContext>) {
   composer.command('start', async (ctx) => {
     ctx.session.clickCount = 0;
-    await ctx.reply('Welcome! Use the buttons below.', {
+    await ctx.reply('Welcome! Use the buttons below or send /help to see available commands.', {
       reply_markup: createCounterKeyboard(),
     });
   });
