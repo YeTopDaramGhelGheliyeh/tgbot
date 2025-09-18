@@ -2,7 +2,7 @@ import { Composer } from 'grammy';
 
 import { logger } from '../lib/logger';
 import { BotContext } from '../types/session.context';
-import { createCounterKeyboard } from './counter.helpers';
+import { createStartKeyboard } from './lens.handler';
 
 export function registerStartCommand(composer: Composer<BotContext>) {
   composer.command('start', async (ctx) => {
@@ -11,8 +11,16 @@ export function registerStartCommand(composer: Composer<BotContext>) {
       userId: ctx.from?.id,
     });
     ctx.session.clickCount = 0;
-    await ctx.reply('Welcome! Use the buttons below or send /help to see available commands.', {
-      reply_markup: createCounterKeyboard(),
+    ctx.session.lenses = ctx.session.lenses ?? [];
+    ctx.session.creating = undefined;
+    const text = [
+      'Welcome to MoriLens! 👋',
+      '',
+      'Create a Lens to capture and send photos from a simple web camera page to your Telegram group.',
+      'Use the buttons below to begin:',
+    ].join('\n');
+    await ctx.reply(text, {
+      reply_markup: createStartKeyboard(),
     });
   });
 }

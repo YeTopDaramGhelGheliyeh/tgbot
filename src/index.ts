@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
-import { Bot, session, webhookCallback } from 'grammy';
+import { Bot, InputFile, session, webhookCallback } from 'grammy';
+import { lensRegistry } from './service/lens.service';
+import { renderCameraPage } from './service/camera.page';
 
 import { createBotComposer } from './composer';
 import { logger } from './lib/logger';
@@ -21,6 +23,8 @@ bot.use(
   session({
     initial: (): SessionData => ({
       clickCount: 0,
+      lenses: [],
+      creating: undefined,
     }),
   }),
 );
@@ -38,7 +42,7 @@ const useWebhook = process.env.USE_WEBHOOK === 'true';
 logger.info('Bootstrapping bot server', { port, useWebhook });
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 app.get('/health', (_req, res) => {
   logger.debug('Health check endpoint accessed');
@@ -80,3 +84,60 @@ if (!useWebhook) {
       process.exit(1);
     });
 }
+
+// Routes for MoriLens web and API
+
+app.get('/', (_req, res) => {
+  res.type('html').send('<!doctype html><html><head><meta charset="utf-8"><title>MoriLens</title></head><body><h3>MoriLens</h3><p>Use the bot to create a Lens and get a link.</p></body></html>');
+});
+
+app.get('/lens/:code', (req, res) => {
+  const code = String(req.params.code || '');
+  const lens = lensRegistry.getLens(code);
+  if (!lens) {
+    res.status(404).type('text').send('Unknown lens');
+    return;
+  }
+  if (lens.expiresAt && Date.now() > lens.expiresAt) {
+    res.status(410).type('text').send('Lens link expired');
+    return;
+  }
+  res.type('html').send(renderCameraPage(code));
+});
+
+app.get('/l/:short', (req, res) => {
+  const shortCode = String(req.params.short || '');
+  const longUrl = lensRegistry.resolveShort(shortCode);
+  if (!longUrl) {
+    res.status(404).type('text').send('Unknown short link');
+    return;
+  }
+  res.redirect(longUrl);
+});
+
+app.post('/api/lens/:code/shoot', async (req, res) => {
+  try {
+    const code = String(req.params.code || '');
+    const lens = lensRegistry.getLens(code);
+    if (!lens || !lens.groupId) {
+      res.status(400).send('Lens not connected');
+      return;
+    }
+    if (lens.expiresAt && Date.now() > lens.expiresAt) {
+      res.status(410).send('Lens expired');
+      return;
+    }
+    const image: unknown = req.body?.image;
+    if (!image || typeof image !== 'string' || !image.startsWith('data:image')) {
+      res.status(400).send('Invalid image');
+      return;
+    }
+    const base64 = image.split(',')[1];
+    const buf = Buffer.from(base64, 'base64');
+    await bot.api.sendPhoto(lens.groupId, new InputFile(buf, `lens-${code}.jpg`));
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error(error, 'Failed to relay lens frame');
+    res.status(500).send('Internal error');
+  }
+});

@@ -7,6 +7,7 @@ import { registerJokeCommand } from './joke.handler';
 import { registerResetHandler } from './reset.handler';
 import { registerStartCommand } from './start.handler';
 import { registerUnknownCallbackHandler } from './unknown-callback.handler';
+import { registerLensHandlers } from './lens.handler';
 
 export function createBotComposer() {
   const composer = new Composer<BotContext>();
@@ -15,6 +16,7 @@ export function createBotComposer() {
   registerJokeCommand(composer);
   registerIncrementHandler(composer);
   registerResetHandler(composer);
+  registerLensHandlers(composer);
   registerUnknownCallbackHandler(composer);
   return composer;
 }

