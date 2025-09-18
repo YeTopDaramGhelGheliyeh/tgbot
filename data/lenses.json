@@ -1,0 +1,28 @@
+{
+  "lenses": [
+    {
+      "code": "B5JLGK",
+      "name": "gozo",
+      "ownerUserId": 119289217
+    },
+    {
+      "code": "ML3YNP",
+      "name": "goz baghali",
+      "ownerUserId": 119289217,
+      "groupId": -4950946943,
+      "expiresAt": 1758466261998,
+      "shortCode": "ryG7MPC"
+    },
+    {
+      "code": "YHCFWC",
+      "name": "sina",
+      "ownerUserId": 119289217,
+      "groupId": -4950946943,
+      "expiresAt": 1758224682413
+    }
+  ],
+  "short": {
+    "ryG7MPC": "https://morilens.party/lens/ML3YNP?exp=1758466261998",
+    "q5AGhjE": "https://morilens.party/lens/YHCFWC?exp=1758224682413"
+  }
+}

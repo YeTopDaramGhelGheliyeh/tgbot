@@ -21,6 +21,7 @@ export interface SessionData {
   clickCount: number;
   lenses: Lens[];
   creating?: CreationState;
+  uiMessageId?: number;
 }
 
 export type BotContext = Context & SessionFlavor<SessionData>;

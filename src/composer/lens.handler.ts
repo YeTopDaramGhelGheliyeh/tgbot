@@ -8,6 +8,7 @@ const START_CREATE = 'lens_create';
 const START_LIST = 'lens_list';
 const EXPIRE_PREFIX = 'lens_expire_'; // +choice:code
 const TOGGLE_PREFIX = 'lens_toggle_'; // +code
+const CANCEL = 'lens_cancel';
 
 function startKeyboard() {
   return new InlineKeyboard()
@@ -24,12 +25,20 @@ function expiryKeyboard(code: string) {
     .row()
     .text('2 days', `${EXPIRE_PREFIX}2d:${code}`)
     .text('3 days', `${EXPIRE_PREFIX}3d:${code}`)
-    .text('4 days', `${EXPIRE_PREFIX}4d:${code}`);
+    .text('4 days', `${EXPIRE_PREFIX}4d:${code}`)
+    .row()
+    .text('Cancel', CANCEL);
 }
 
-function toggleKeyboard(code: string, show: 'short' | 'long') {
+function linkKeyboard(code: string, show: 'short' | 'long') {
   const label = show === 'short' ? 'Show Short Link' : 'Show Long Link';
-  return new InlineKeyboard().text(label, `${TOGGLE_PREFIX}${show}:${code}`);
+  return new InlineKeyboard()
+    .text(label, `${TOGGLE_PREFIX}${show}:${code}`)
+    .row()
+    .text('My Lens', START_LIST)
+    .text('Create New Lens', START_CREATE)
+    .row()
+    .text('Cancel', CANCEL);
 }
 
 export function registerLensHandlers(composer: Composer<BotContext>) {
@@ -37,7 +46,9 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
   composer.callbackQuery(START_CREATE, async (ctx) => {
     ctx.session.creating = { step: 'await_name' } as CreationState;
     await ctx.answerCallbackQuery();
-    await ctx.reply('Great! Send me a name for this Lens (e.g., Event Gate, Front Door, etc.).');
+    await ctx.reply('Great! Send me a name for this Lens (e.g., Event Gate, Front Door, etc.).', {
+      reply_markup: new InlineKeyboard().text('Cancel', CANCEL),
+    });
   });
 
   composer.callbackQuery(START_LIST, async (ctx) => {
@@ -77,7 +88,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
 
       const share = encodeURIComponent(`/connect ${code}`);
       const shareUrl = `https://t.me/share/url?url=${share}&text=${share}`;
-      const kb = new InlineKeyboard().url('Open Chats', shareUrl);
+      const kb = new InlineKeyboard().url('Open Chats', shareUrl).row().text('Cancel', CANCEL);
       await ctx.reply(instructions, { reply_markup: kb });
       return;
     }
@@ -153,9 +164,9 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
 
       await ctx.answerCallbackQuery({ text: 'Expiry set' });
       try {
-        await ctx.editMessageText(text, { reply_markup: toggleKeyboard(lens.code, 'short') });
+        await ctx.editMessageText(text, { reply_markup: linkKeyboard(lens.code, 'short') });
       } catch {
-        await ctx.reply(text, { reply_markup: toggleKeyboard(lens.code, 'short') });
+        await ctx.reply(text, { reply_markup: linkKeyboard(lens.code, 'short') });
       }
       return;
     }
@@ -177,14 +188,21 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
         : `Long link:\n${longUrl}`;
       await ctx.answerCallbackQuery();
       try {
-        await ctx.editMessageText(text, { reply_markup: toggleKeyboard(code, showShort ? 'long' : 'short') });
+        await ctx.editMessageText(text, { reply_markup: linkKeyboard(code, showShort ? 'long' : 'short') });
       } catch {
-        await ctx.reply(text, { reply_markup: toggleKeyboard(code, showShort ? 'long' : 'short') });
+        await ctx.reply(text, { reply_markup: linkKeyboard(code, showShort ? 'long' : 'short') });
       }
       return;
     }
 
     await next();
+  });
+
+  // Cancel flow: return to menu without welcome
+  composer.callbackQuery(CANCEL, async (ctx) => {
+    ctx.session.creating = undefined;
+    await ctx.answerCallbackQuery();
+    await ctx.reply('Back to main menu — pick an option below.', { reply_markup: startKeyboard() });
   });
 }
 

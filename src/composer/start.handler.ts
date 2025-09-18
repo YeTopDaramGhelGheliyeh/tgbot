@@ -2,7 +2,7 @@ import { Composer } from 'grammy';
 
 import { logger } from '../lib/logger';
 import { BotContext } from '../types/session.context';
-import { createStartKeyboard } from './lens.handler';
+import { createStartKeyboard } from './lens2.handler';
 
 export function registerStartCommand(composer: Composer<BotContext>) {
   composer.command('start', async (ctx) => {

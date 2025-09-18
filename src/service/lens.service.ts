@@ -1,5 +1,7 @@
 import { logger } from '../lib/logger';
 import type { Lens } from '../types/session.context';
+import fs from 'fs';
+import path from 'path';
 
 function randomString(length: number, alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789') {
   let out = '';
@@ -31,6 +33,13 @@ export function choiceToMs(choice: ExpiryChoice): number {
 }
 
 const BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://morilens.party').replace(/\/$/, '');
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const DATA_PATH = path.join(DATA_DIR, 'lenses.json');
+
+type Persisted = {
+  lenses: Lens[];
+  short: Record<string, string>;
+};
 
 class LensRegistry {
   private lensesByCode = new Map<string, Lens>();
@@ -38,6 +47,46 @@ class LensRegistry {
   private lensesByOwner = new Map<number, Set<string>>();
 
   private shortToLong = new Map<string, string>();
+
+  constructor() {
+    this.load();
+  }
+
+  private load() {
+    try {
+      if (fs.existsSync(DATA_PATH)) {
+        const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+        const payload = JSON.parse(raw) as Persisted;
+        for (const l of payload.lenses || []) {
+          this.lensesByCode.set(l.code, l);
+          if (!this.lensesByOwner.has(l.ownerUserId)) this.lensesByOwner.set(l.ownerUserId, new Set());
+          this.lensesByOwner.get(l.ownerUserId)!.add(l.code);
+        }
+        for (const [k, v] of Object.entries(payload.short || {})) {
+          this.shortToLong.set(k, v);
+        }
+        logger.info('Loaded lenses from disk', { count: this.lensesByCode.size });
+      } else {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        this.save();
+      }
+    } catch (err) {
+      logger.error(err, 'Failed to load lenses data');
+    }
+  }
+
+  private save() {
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      const payload: Persisted = {
+        lenses: Array.from(this.lensesByCode.values()),
+        short: Object.fromEntries(this.shortToLong.entries()),
+      };
+      fs.writeFileSync(DATA_PATH, JSON.stringify(payload, null, 2));
+    } catch (err) {
+      logger.error(err, 'Failed to save lenses data');
+    }
+  }
 
   createLens(ownerUserId: number, name: string): Lens {
     // Ensure uniqueness of code
@@ -51,6 +100,7 @@ class LensRegistry {
     if (!this.lensesByOwner.has(ownerUserId)) this.lensesByOwner.set(ownerUserId, new Set());
     this.lensesByOwner.get(ownerUserId)!.add(code);
     logger.info('Created new lens', { ownerUserId, code, name });
+    this.save();
     return lens;
   }
 
@@ -59,6 +109,7 @@ class LensRegistry {
     if (!lens) return undefined;
     lens.groupId = groupId;
     logger.info('Lens connected to group', { code, groupId });
+    this.save();
     return lens;
   }
 
@@ -67,6 +118,7 @@ class LensRegistry {
     if (!lens) return undefined;
     lens.expiresAt = expiresAt;
     logger.info('Lens expiry set', { code, expiresAt });
+    this.save();
     return lens;
   }
 
@@ -98,6 +150,7 @@ class LensRegistry {
       shortCode = randomString(7, 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ123456789');
     } while (this.shortToLong.has(shortCode));
     this.shortToLong.set(shortCode, longUrl);
+    this.save();
     return { shortCode, shortUrl: this.shortUrl(shortCode) };
   }
 
