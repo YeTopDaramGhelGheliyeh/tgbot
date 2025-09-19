@@ -33,6 +33,7 @@ export function choiceToMs(choice: ExpiryChoice): number {
 }
 
 const BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://morilens.party').replace(/\/$/, '');
+const GRACE_MS = 4 * 24 * 60 * 60 * 1000; // 4 days after expiry
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DATA_PATH = path.join(DATA_DIR, 'lenses.json');
 
@@ -127,6 +128,7 @@ class LensRegistry {
   }
 
   listByOwner(ownerUserId: number): Lens[] {
+    this.cleanup();
     const codes = this.lensesByOwner.get(ownerUserId);
     if (!codes) return [];
     return Array.from(codes).map((c) => this.lensesByCode.get(c)!).filter(Boolean);
@@ -136,6 +138,26 @@ class LensRegistry {
     const lens = this.lensesByCode.get(code);
     if (!lens || !lens.expiresAt) return false;
     return Date.now() > lens.expiresAt;
+  }
+
+  cleanup() {
+    const now = Date.now();
+    let removed = 0;
+    for (const [code, lens] of this.lensesByCode.entries()) {
+      if (lens.expiresAt && now - lens.expiresAt > GRACE_MS) {
+        this.lensesByCode.delete(code);
+        const ownerSet = this.lensesByOwner.get(lens.ownerUserId);
+        if (ownerSet) {
+          ownerSet.delete(code);
+          if (ownerSet.size === 0) this.lensesByOwner.delete(lens.ownerUserId);
+        }
+        removed += 1;
+      }
+    }
+    if (removed > 0) {
+      logger.info('Cleaned up expired lenses beyond grace period', { removed });
+      this.save();
+    }
   }
 
   ensureShort(longUrl: string): { shortCode: string; shortUrl: string } {

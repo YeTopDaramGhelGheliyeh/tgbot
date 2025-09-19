@@ -18,11 +18,20 @@
       "name": "sina",
       "ownerUserId": 119289217,
       "groupId": -4950946943,
-      "expiresAt": 1758224682413
+      "expiresAt": 1758224682413,
+      "shortCode": "q5AGhjE"
+    },
+    {
+      "code": "YCHD5E",
+      "name": "Sina",
+      "ownerUserId": 119289217,
+      "groupId": -4950946943,
+      "expiresAt": 1758306796539
     }
   ],
   "short": {
     "ryG7MPC": "https://morilens.party/lens/ML3YNP?exp=1758466261998",
-    "q5AGhjE": "https://morilens.party/lens/YHCFWC?exp=1758224682413"
+    "q5AGhjE": "https://morilens.party/lens/YHCFWC?exp=1758224682413",
+    "oCX414A": "https://morilens.party/lens/YCHD5E?exp=1758306796539"
   }
 }

@@ -98,10 +98,6 @@ app.get('/lens/:code', (req, res) => {
     res.status(404).type('text').send('Unknown lens');
     return;
   }
-  if (lens.expiresAt && Date.now() > lens.expiresAt) {
-    res.status(410).type('text').send('Lens link expired');
-    return;
-  }
   res.type('html').send(renderCameraPage(code));
 });
 
