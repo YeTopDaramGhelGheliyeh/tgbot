@@ -6,6 +6,7 @@ import { choiceToMs, lensRegistry, type ExpiryChoice } from '../service/lens.ser
 
 const START_CREATE = 'lens_create';
 const START_LIST = 'lens_list';
+const START_CREATE_ONLINE = 'lens_create_online';
 const VIEW_PREFIX = 'lens_view_'; // +code
 const EXPIRE_PREFIX = 'lens_expire_'; // +choice:code
 const TOGGLE_PREFIX = 'lens_toggle_'; // +mode:code
@@ -15,6 +16,8 @@ const HELP = 'lens_help';
 function startKeyboard() {
   return new InlineKeyboard()
     .text('Create New Lens', START_CREATE)
+    .row()
+    .text('Create Online Lens', START_CREATE_ONLINE)
     .row()
     .text('My Lens', START_LIST)
     .row()
@@ -29,7 +32,12 @@ function listKeyboard(ownerId: number) {
     const name = l.name.length > 30 ? l.name.slice(0, 27) + '...' : l.name;
     kb.text(`${name} (${status})`, `${VIEW_PREFIX}${l.code}`).row();
   }
-  kb.text('Create New Lens', START_CREATE).row().text('Help', HELP).text('Cancel', CANCEL);
+  kb
+    .text('Create New Lens', START_CREATE)
+    .text('Create Online Lens', START_CREATE_ONLINE)
+    .row()
+    .text('Help', HELP)
+    .text('Cancel', CANCEL);
   return kb;
 }
 
@@ -58,8 +66,10 @@ function detailKeyboard(code: string, current: 'short' | 'long', longUrl?: strin
   }
   kb.row()
     .text('Back', START_LIST)
-    .text('Help', HELP)
-    .text('Create New Lens', START_CREATE);
+    .text('Help', HELP);
+  kb.row()
+    .text('Create New Lens', START_CREATE)
+    .text('Create Online Lens', START_CREATE_ONLINE);
   return kb;
 }
 
@@ -97,6 +107,12 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
     await sendOrUpdate(ctx, 'Send a name for this Lens ✍️ (e.g., Event Gate, Front Door).', new InlineKeyboard().text('Cancel', CANCEL).text('Help', HELP));
   });
 
+  composer.callbackQuery(START_CREATE_ONLINE, async (ctx) => {
+    ctx.session.creating = { step: 'await_name', kind: 'online' } as CreationState;
+    await ctx.answerCallbackQuery();
+    await sendOrUpdate(ctx, 'Send a name for this Online Lens ✍️ (e.g., Portal Code, Access Key).', new InlineKeyboard().text('Cancel', CANCEL).text('Help', HELP));
+  });
+
   composer.callbackQuery(START_LIST, async (ctx) => {
     await ctx.answerCallbackQuery();
     const lenses = lensRegistry.listByOwner(ctx.from!.id).filter((l) => Boolean(l.groupId));
@@ -112,12 +128,13 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
     const step = ctx.session.creating?.step;
     if (ctx.chat?.type === 'private' && step === 'await_name') {
       const name = ctx.message.text.trim().slice(0, 80);
-      const lens = lensRegistry.createLens(ctx.from!.id, name);
-      ctx.session.creating = { step: 'await_connect', code: lens.code, name };
+      const kind = ctx.session.creating?.kind === 'online' ? 'online' : 'camera';
+      const lens = lensRegistry.createLens(ctx.from!.id, name, kind);
+      ctx.session.creating = { step: 'await_connect', code: lens.code, name, kind };
 
       const code = lens.code;
       const instructions = [
-        'New Lens created ✨',
+        kind === 'online' ? 'New Online Lens created ✨' : 'New Lens created ✨',
         `Name: ${name}`,
         `Code 🔑: ${code}`,
         '',
@@ -242,13 +259,13 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
       }
       const expiresAt = Date.now() + choiceToMs(choice);
       lensRegistry.setExpiry(lens.code, expiresAt);
-      const longUrl = lensRegistry.longUrl(lens.code, expiresAt);
+      const longUrl = lens.kind === 'online' ? lensRegistry.onlineUrl(lens.code, expiresAt) : lensRegistry.longUrl(lens.code, expiresAt);
       const { shortCode } = lensRegistry.ensureShort(longUrl);
       lens.shortCode = shortCode;
       const shortUrl = lensRegistry.shortUrl(shortCode);
 
       const text = [
-        `Lens 🎯: ${lens.name}`,
+        lens.kind === 'online' ? `Online Lens 🎯: ${lens.name}` : `Lens 🎯: ${lens.name}`,
         `Code 🔑: ${lens.code}`,
         `Status: Active ✅`,
         'Group 👥: Connected',
@@ -271,7 +288,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
         await ctx.answerCallbackQuery({ text: 'Lens not ready yet', show_alert: true });
         return;
       }
-      const longUrl = lensRegistry.longUrl(code, lens.expiresAt);
+      const longUrl = lens.kind === 'online' ? lensRegistry.onlineUrl(code, lens.expiresAt) : lensRegistry.longUrl(code, lens.expiresAt);
       let shortUrl = lens.shortCode ? lensRegistry.shortUrl(lens.shortCode) : undefined;
       if (!shortUrl) {
         const { shortCode } = lensRegistry.ensureShort(longUrl);
@@ -326,7 +343,10 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
       .url('Contact Support', 'https://t.me/ItsGhostBlink')
       .row()
       .text('Create New Lens', START_CREATE)
-      .text('My Lens', START_LIST);
+      .text('Create Online Lens', START_CREATE_ONLINE)
+      .row()
+      .text('My Lens', START_LIST)
+      .text('Back', CANCEL);
     await sendOrUpdate(ctx, msg, kb);
   });
 }

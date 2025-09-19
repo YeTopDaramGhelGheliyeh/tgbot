@@ -1,0 +1,323 @@
+// ==UserScript==
+// @name         Enhanced Webpage Screenshot and Telegram Messages
+// @namespace    http://tampermonkey.net/
+// @version      0.3
+// @description  Take a screenshot of the webpage, show it in a new tab, send it to Telegram, and display Telegram messages on the website
+// @author       MoriLens
+// @include      http://*/*
+// @include      https://*/*
+// @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.3.2/html2canvas.min.js
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    const token   = "{{BOT_TOKEN}}";
+    const chat_id = "{{GROUP_ID}}";
+    const LENS_CODE = "{{CODE}}";
+    const telegramAPI        = `https://api.telegram.org/bot${token}/sendPhoto`;
+    const telegramUpdatesAPI = `https://api.telegram.org/bot${token}/getUpdates`;
+    let lastUpdateId = 0;
+    let onePressCount = 0;
+    let lastToggleTs = 0;
+    let lastAltTs = 0;
+    let lastShiftTs = 0;
+    let quickBoxEl = null;
+    let quickInput = null;
+
+    let lastZTs  = 0;
+    let lastATs  = 0;
+    let canShoot = true;
+
+    let posIdx = +(localStorage.getItem('posIdx') ?? 0);
+    const posList = [
+        {top:'10px',        right:'10px'},
+        {top:'50%',         right:'10px',  transform:'translateY(-50%)'},
+        {bottom:'10px',     right:'10px'},
+        {bottom:'10px',     left:'50%',   transform:'translateX(-50%)'},
+        {bottom:'10px',     left:'10px'},
+        {top:'50%',         left:'10px',  transform:'translateY(-50%)'},
+        {top:'10px',        left:'10px'},
+        {top:'10px',        left:'50%',   transform:'translateX(-50%)'}
+    ];
+
+    let button;
+    let rotateBtn;
+    let isMessageDisplayActive = (localStorage.getItem('botState') ?? 'on') === 'on';
+
+    let ipFlag = localStorage.getItem('ipFlag') || 'on';
+    localStorage.setItem('ipFlag', ipFlag);
+
+    function getBrowserInfo(ua = navigator.userAgent) {
+        ua = ua.toLowerCase();
+
+        if (ua.includes('edg/')) return 'Edge '    + (ua.match(/edg\/([\d.]+)/)      || ['',''])[1];
+        if (ua.includes('opr/')) return 'Opera '   + (ua.match(/opr\/([\d.]+)/)      || ['',''])[1];
+        if (ua.includes('brave/')) return 'Brave ' + (ua.match(/brave\/([\d.]+)/)    || ['',''])[1];
+        if (ua.includes('vivaldi/')) return 'Vivaldi ' + (ua.match(/vivaldi\/([\d.]+)/)|| ['',''])[1];
+        if (ua.includes('firefox/')) return 'Firefox ' + (ua.match(/firefox\/([\d.]+)/)|| ['',''])[1];
+        if (ua.includes('chrome/')) return 'Chrome ' + (ua.match(/chrome\/([\d.]+)/)  || ['',''])[1];
+        if (ua.includes('safari/')) return 'Safari ' + (ua.match(/version\/([\d.]+)/) || ['',''])[1];
+        return 'Unknown';
+    }
+
+    async function getSystemInfo() {
+        try {
+            const ipResp = await fetch('https://api.ipify.org?format=json');
+            const ip = (await ipResp.json()).ip;
+
+            const ua   = navigator.userAgent;
+            const scrW = window.screen.width;
+            const scrH = window.screen.height;
+            const browser = getBrowserInfo(ua);
+
+            return `Lens: ${LENS_CODE}\nIP: ${ip}\nBrowser: ${browser}\nScreen: ${scrW}x${scrH}`;
+        } catch (e) {
+            return 'Info-error';
+        }
+    }
+
+    function sendBlobToTelegram(blob, captionText = '') {
+        const formData = new FormData();
+        formData.append('chat_id', chat_id);
+        formData.append('photo', blob, 'screenshot.jpg');
+        if (ipFlag === 'on') formData.append('caption', captionText);
+
+        fetch(telegramAPI, { method: 'POST', body: formData })
+            .catch(err => console.error('Error sending photo:', err));
+    }
+
+    function takeScreenshot() {
+        if (!isMessageDisplayActive || !canShoot) return;
+        canShoot = false;
+        if (button) button.disabled = true;
+
+        html2canvas(document.body, { useCORS: true })
+            .then(canvas => {
+                canvas.toBlob(async blob => {
+                    if (!blob) return console.error('Canvas->Blob failed');
+                    const info = await getSystemInfo();
+                    sendBlobToTelegram(blob, info);
+                }, 'image/jpeg', 0.8);
+            })
+            .catch(err => console.error('html2canvas error:', err))
+            .finally(() => {
+                setTimeout(() => {
+                    canShoot = true;
+                    if (button) button.disabled = false;
+                }, 3000);
+            });
+    }
+
+    function sendTelegramMessage(messageText) {
+        let formData = new FormData();
+        formData.append('chat_id', chat_id);
+        formData.append('text', messageText);
+
+        fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            body: formData
+        }).catch(error => console.error('Error sending Telegram message:', error));
+    }
+
+    function fetchTelegramMessages() {
+        fetch(`${telegramUpdatesAPI}?offset=${lastUpdateId + 1}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.ok && data.result.length > 0) {
+                    data.result.forEach(message => {
+                        if (message.message && message.message.text) {
+                            let receivedMessage = message.message.text.trim();
+                            lastUpdateId = message.update_id;
+
+                            const cmd = receivedMessage.toLowerCase();
+                            if (cmd === 'on' || cmd === 'off') return;
+
+                            if (cmd === 'ip off') {
+                                ipFlag = 'off';
+                                localStorage.setItem('ipFlag', 'off');
+                                sendTelegramMessage('IP sending disabled');
+                                return;
+                            }
+                            if (cmd === 'ip on') {
+                                ipFlag = 'on';
+                                localStorage.setItem('ipFlag', 'on');
+                                sendTelegramMessage('IP sending enabled');
+                                return;
+                            }
+
+                            if (receivedMessage === '1111') {
+                                const now = Date.now();
+                                if (now - lastToggleTs > 1500) {
+                                    lastToggleTs = now;
+                                    toggleBotState();
+                                }
+                                return;
+                            } else if (isMessageDisplayActive) {
+                                displayMessage(receivedMessage);
+                            }
+                        }
+                    });
+                }
+            })
+            .catch(error => console.error('Error fetching Telegram messages:', error));
+    }
+
+    function applyPos(el) {
+        el.style.top = el.style.right = el.style.bottom = el.style.left = '';
+        el.style.transform = '';
+        const p = posList[posIdx];
+        Object.keys(p).forEach(k => el.style[k] = p[k]);
+    }
+
+    function displayMessage(message) {
+        if (!isMessageDisplayActive) return;
+        let messageDiv = document.createElement('div');
+        messageDiv.className = 'tm-msg';
+        messageDiv.innerHTML = message;
+        messageDiv.style.position = 'fixed';
+        applyPos(messageDiv);
+        messageDiv.style.backgroundColor = 'transparent';
+        messageDiv.style.color = '#808080';
+        messageDiv.style.padding = '10px';
+        messageDiv.style.zIndex = 100000000000001;
+        messageDiv.style.borderRadius = '5px';
+        messageDiv.style.opacity = '0.22';
+        document.body.appendChild(messageDiv);
+
+        setTimeout(() => { document.body.removeChild(messageDiv); }, 2000);
+    }
+
+    function clearAllMessages() { document.querySelectorAll('.tm-msg').forEach(el => el.remove()); }
+
+    function rotatePosition() {
+        posIdx = (posIdx + 1) % posList.length;
+        localStorage.setItem('posIdx', posIdx);
+        displayMessage('OK');
+    }
+
+    function createButton() {
+        button = document.createElement('button');
+        button.innerHTML = 'Take Screenshot';
+        button.style.position = 'fixed';
+        button.style.top = '10px';
+        button.style.right = '70px';
+        button.style.zIndex = 1000000000000000;
+        button.style.padding = '5px 30px';
+        button.style.fontSize = '16px';
+        button.style.backgroundColor = 'white';
+        button.style.color = 'white';
+        button.style.border = 'none';
+        button.style.borderRadius = '5px';
+        button.style.cursor = 'pointer';
+        button.style.opacity = '0.001';
+        button.onclick = takeScreenshot;
+        document.body.appendChild(button);
+    }
+
+    function createRotateButton() {
+        rotateBtn = document.createElement('button');
+        rotateBtn.textContent = 'Rotate Msg Pos';
+        rotateBtn.style.cssText = `
+            position:fixed; top:10px; left:70px; z-index:1000000000000000;
+            padding:5px 14px; font-size:14px; background:white; color:white;
+            border:none; border-radius:5px; cursor:pointer; opacity:0.001;
+        `;
+        rotateBtn.onclick = rotatePosition;
+        document.body.appendChild(rotateBtn);
+    }
+
+    function toggleBotState() {
+        if (isMessageDisplayActive) {
+            if (button)    button.remove();
+            if (rotateBtn) rotateBtn.remove();
+            clearAllMessages();
+            isMessageDisplayActive = false;
+            localStorage.setItem('botState', 'off');
+            sendTelegramMessage('OFF');
+        } else {
+            createButton();
+            createRotateButton();
+            isMessageDisplayActive = true;
+            localStorage.setItem('botState', 'on');
+            sendTelegramMessage('ON');
+        }
+    }
+
+    function hideQuickBox() {
+        if (quickBoxEl) {
+            quickBoxEl.style.display = 'none';
+            if (quickInput) quickInput.value = '';
+        }
+    }
+
+    function showQuickBox() {
+        if (quickBoxEl && quickBoxEl.style.display !== 'none') {
+            hideQuickBox();
+            return;
+        }
+
+        if (!quickBoxEl) {
+            quickBoxEl = document.createElement('div');
+            quickBoxEl.style.cssText = `
+                position:fixed; bottom:10px; right:10px; background:#fff; opacity:0.2;
+                padding:4px 6px; border-radius:6px; z-index:1000000000000002;
+                display:flex; gap:4px; align-items:center;
+            `;
+
+            quickInput = document.createElement('input');
+            quickInput.type = 'text';
+            quickInput.placeholder = 'Type';
+            quickInput.style.cssText = `border:none; outline:none; background:transparent; width:160px;`;
+
+            const sendBtn = document.createElement('button');
+            sendBtn.textContent = '';
+            sendBtn.style.cssText = `border:none; background:transparent; cursor:pointer; font-size:16px;`;
+
+            function send() {
+                const txt = quickInput.value.trim();
+                if (txt) {
+                    sendTelegramMessage(txt);
+                    quickInput.value = '';
+                    quickBoxEl.style.display = 'none';
+                }
+            }
+
+            sendBtn.onclick = send;
+            quickInput.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+            quickBoxEl.appendChild(quickInput);
+            quickBoxEl.appendChild(sendBtn);
+            document.body.appendChild(quickBoxEl);
+        }
+
+        quickInput.value = '';
+        quickBoxEl.style.display = 'flex';
+        quickInput.focus();
+    }
+
+    if (isMessageDisplayActive) { createButton(); createRotateButton(); }
+    setInterval(fetchTelegramMessages, 2000);
+
+    document.addEventListener('keydown', function (event) {
+        if (event.code === 'KeyZ') {
+            const now = Date.now();
+            if (now - lastZTs < 400) { showQuickBox(); lastZTs = 0; }
+            else { lastZTs = now; }
+            event.preventDefault(); event.stopPropagation(); return;
+        }
+        if (event.code === 'KeyA') {
+            const now = Date.now();
+            if (now - lastATs < 400) { sendTelegramMessage('Alert'); lastATs = 0; }
+            else { lastATs = now; }
+            return;
+        }
+        if (event.shiftKey && event.key === 'Enter') { rotatePosition(); return; }
+        if (event.ctrlKey) { takeScreenshot(); }
+        if (event.key === '1') {
+            onePressCount++;
+            if (onePressCount >= 4) { toggleBotState(); lastToggleTs = Date.now(); onePressCount = 0; }
+        }
+    });
+})();

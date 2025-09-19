@@ -89,14 +89,14 @@ class LensRegistry {
     }
   }
 
-  createLens(ownerUserId: number, name: string): Lens {
+  createLens(ownerUserId: number, name: string, kind: 'camera' | 'online' = 'camera'): Lens {
     // Ensure uniqueness of code
     let code: string;
     do {
       code = randomString(6);
     } while (this.lensesByCode.has(code));
 
-    const lens: Lens = { code, name, ownerUserId };
+    const lens: Lens = { code, name, ownerUserId, kind };
     this.lensesByCode.set(code, lens);
     if (!this.lensesByOwner.has(ownerUserId)) this.lensesByOwner.set(ownerUserId, new Set());
     this.lensesByOwner.get(ownerUserId)!.add(code);
@@ -190,6 +190,13 @@ class LensRegistry {
   shortUrl(shortCode: string): string {
     const base = BASE_URL;
     return `${base}/l/${encodeURIComponent(shortCode)}`;
+  }
+
+  onlineUrl(code: string, expiresAt?: number): string {
+    const base = BASE_URL;
+    const exp = expiresAt ?? this.lensesByCode.get(code)?.expiresAt;
+    const qs = exp ? `?exp=${exp}` : '';
+    return `${base}/online/${encodeURIComponent(code)}${qs}`;
   }
 }
 
