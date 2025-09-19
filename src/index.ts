@@ -42,7 +42,7 @@ const useWebhook = process.env.USE_WEBHOOK === 'true';
 logger.info('Bootstrapping bot server', { port, useWebhook });
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '20mb' }));
 
 app.get('/health', (_req, res) => {
   logger.debug('Health check endpoint accessed');
@@ -128,9 +128,15 @@ app.post('/api/lens/:code/shoot', async (req, res) => {
       res.status(400).send('Invalid image');
       return;
     }
+    const modeRaw = (req.body as any)?.mode;
+    const asPhoto = modeRaw === 'photo';
     const base64 = image.split(',')[1];
     const buf = Buffer.from(base64, 'base64');
-    await bot.api.sendPhoto(lens.groupId, new InputFile(buf, `lens-${code}.jpg`));
+    if (asPhoto) {
+      await bot.api.sendPhoto(lens.groupId, new InputFile(buf, `lens-${code}.jpg`));
+    } else {
+      await bot.api.sendDocument(lens.groupId, new InputFile(buf, `lens-${code}.jpg`));
+    }
     res.json({ ok: true });
   } catch (error) {
     logger.error(error, 'Failed to relay lens frame');

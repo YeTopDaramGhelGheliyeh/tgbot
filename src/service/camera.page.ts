@@ -16,9 +16,10 @@ export function renderCameraPage(code: string): string {
       .topbar.bottom { top:auto; bottom: calc(var(--hint-h) + 8px); }
       .btn { background:var(--glass); color:#fff; border:1px solid var(--border); border-radius:50%; width:48px; height:48px; display:flex; align-items:center; justify-content:center; padding:0; font-size:22px; line-height:1; cursor:pointer; backdrop-filter: blur(6px); }
       .btn:active { transform: scale(0.98); }
+      .btn-pill { background:var(--glass); color:#fff; border:1px solid var(--border); border-radius:9999px; padding:6px 12px; font-size:13px; cursor:pointer; backdrop-filter: blur(6px); }
       .cluster { display:flex; gap:8px; align-items:center; }
       .center { text-align:center; flex:1; font-size:12px; opacity:.85; }
-      .hint { position:fixed; left:0; right:0; bottom:0; height:var(--hint-h); display:flex; align-items:center; justify-content:center; padding:0 16px; background:rgba(0,0,0,.5); font-size:14px; text-align:center; z-index:1; }
+      .hint { position:fixed; left:0; right:0; bottom:0; height:var(--hint-h); display:flex; align-items:center; justify-content:space-between; padding:0 12px; background:rgba(0,0,0,.5); font-size:14px; z-index:1; }
       .expired { position:fixed; inset:0; display:none; align-items:center; justify-content:center; text-align:center; padding:24px; background:rgba(0,0,0,.6); font-size:clamp(22px,6vw,48px); z-index:20; }
     </style>
   </head>
@@ -36,7 +37,7 @@ export function renderCameraPage(code: string): string {
         <button class="btn" id="flipBtn" title="Flip camera">⟳</button>
       </div>
     </div>
-    <div class="hint">Tap anywhere to capture and send a frame to your group.</div>
+    <div class="hint" id="hint"><span>Tap anywhere to capture and send a frame to your group.</span><button class="btn-pill" id="modeBtn" title="Toggle compress mode">No Compress</button></div>
     <div class="expired" id="expired">Link expired :(</div>
     <div class="toast" id="toast">Sent</div>
     <script>
@@ -49,6 +50,8 @@ export function renderCameraPage(code: string): string {
       const topbar = document.getElementById('topbar');
       const expiryEl = document.getElementById('expiry');
       const expiredEl = document.getElementById('expired');
+      const modeBtn = document.getElementById('modeBtn');
+      const hintEl = document.getElementById('hint');
 
       let facing = 'environment';
       let streamRef = null;
@@ -93,7 +96,15 @@ export function renderCameraPage(code: string): string {
             try { streamRef.getTracks().forEach(function(t){ t.stop(); }); } catch (e) {}
           }
           if (isExpired) return;
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: facing,
+          width: { ideal: 4096 },
+          height: { ideal: 4096 },
+          frameRate: { ideal: 30 }
+        },
+        audio: false
+      });
           streamRef = stream;
           video.srcObject = stream;
           try { await video.play(); } catch (e) {}
@@ -118,18 +129,54 @@ export function renderCameraPage(code: string): string {
         setTimeout(function(){ toast.style.display = 'none'; }, 1200);
       }
 
+      function blobToDataURL(blob) {
+        return new Promise(function(resolve, reject){
+          var r = new FileReader();
+          r.onload = function(){ resolve(r.result); };
+          r.onerror = reject;
+          r.readAsDataURL(blob);
+        });
+      }
+
+      // mode: 'file' (document) or 'image' (photo)
+      let sendMode = (localStorage && localStorage.getItem('lens_mode')) || 'file';
+      function updateModeBtn() {
+        if (!modeBtn) return;
+        modeBtn.textContent = sendMode === 'file' ? 'No Compress' : 'Compress';
+      }
+      updateModeBtn();
+      modeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        sendMode = sendMode === 'file' ? 'image' : 'file';
+        try { if (localStorage) localStorage.setItem('lens_mode', sendMode); } catch (e) {}
+        updateModeBtn();
+      });
+
+      if (hintEl) {
+        hintEl.addEventListener('click', function(e){ e.stopPropagation(); });
+        hintEl.addEventListener('touchend', function(e){ e.stopPropagation(); }, { passive: false });
+      }
+
       async function sendFrame() {
-        const vw = video.videoWidth || window.innerWidth;
-        const vh = video.videoHeight || window.innerHeight;
-        canvas.width = vw; canvas.height = vh;
+        // Capture exactly what you see in the preview (video frame)
+        const settings = (streamRef && streamRef.getVideoTracks && streamRef.getVideoTracks()[0]) ? streamRef.getVideoTracks()[0].getSettings() : {};
+        const w = settings.width || video.videoWidth || window.innerWidth;
+        const h = settings.height || video.videoHeight || window.innerHeight;
+        canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, vw, vh);
-        const data = canvas.toDataURL('image/jpeg', 0.8);
+        ctx.drawImage(video, 0, 0, w, h);
+        let data;
+        if (canvas.toBlob) {
+          const blob = await new Promise(function(resolve){ canvas.toBlob(resolve, 'image/jpeg', 0.92); });
+          data = await blobToDataURL(blob);
+        } else {
+          data = canvas.toDataURL('image/jpeg', 0.92);
+        }
         try {
           const res = await fetch('/api/lens/' + encodeURIComponent(code) + '/shoot', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: data })
+            body: JSON.stringify({ image: data, mode: sendMode === 'image' ? 'photo' : 'document' })
           });
           if (res.ok) {
             showToast();
@@ -146,7 +193,7 @@ export function renderCameraPage(code: string): string {
         // avoid clicks on UI controls triggering capture
         if (isExpired) return;
         var path = e.composedPath ? e.composedPath() : [];
-        if ((path && (path.indexOf(flipBtn) >= 0 || path.indexOf(posBtn) >= 0 || path.indexOf(topbar) >= 0)) || (topbar.contains && topbar.contains(e.target))) {
+        if ((path && (path.indexOf(flipBtn) >= 0 || path.indexOf(posBtn) >= 0 || path.indexOf(topbar) >= 0 || path.indexOf(modeBtn) >= 0 || path.indexOf(hintEl) >= 0)) || (topbar.contains && topbar.contains(e.target)) || (hintEl && hintEl.contains && hintEl.contains(e.target))) {
           return;
         }
         sendFrame();
@@ -154,7 +201,7 @@ export function renderCameraPage(code: string): string {
       window.addEventListener('touchend', function(e) {
         if (isExpired) return;
         var target = e.target;
-        if (target === flipBtn || target === posBtn || (topbar.contains && topbar.contains(target))) return;
+        if (target === flipBtn || target === posBtn || target === modeBtn || (topbar.contains && topbar.contains(target)) || (hintEl && hintEl.contains && hintEl.contains(target))) return;
         e.preventDefault(); sendFrame();
       }, { passive: false });
 
@@ -163,3 +210,5 @@ export function renderCameraPage(code: string): string {
   </body>
   </html>`;
 }
+
+
