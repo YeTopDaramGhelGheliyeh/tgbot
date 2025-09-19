@@ -30,14 +30,14 @@ export function renderCameraPage(code: string): string {
     </div>
     <div class="topbar" id="topbar">
       <div class="cluster left">
-        <button class="btn" id="posBtn" title="Move toolbar">⇅</button>
+        <button class="btn" id="posBtn" title="Move toolbar">&#x21C5;</button>
       </div>
       <div class="center" id="expiry">Expires: --</div>
       <div class="cluster right">
-        <button class="btn" id="flipBtn" title="Flip camera">⟳</button>
+        <button class="btn" id="flipBtn" title="Flip camera">&#x27F3;</button>
       </div>
     </div>
-    <div class="hint" id="hint"><span>Tap anywhere to capture and send a frame to your group.</span><button class="btn-pill" id="modeBtn" title="Toggle compress mode">No Compress</button></div>
+    <div class="hint" id="hint"><span>Tap anywhere to capture; sending takes about 10s. Just keep clicking, send multiple times.</span><button class="btn-pill" id="modeBtn" title="Toggle compress mode">No Compress</button></div>
     <div class="expired" id="expired">Link expired :(</div>
     <div class="toast" id="toast">Sent</div>
     <script>
@@ -210,5 +210,7 @@ export function renderCameraPage(code: string): string {
   </body>
   </html>`;
 }
+
+
 
 
