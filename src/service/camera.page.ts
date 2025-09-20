@@ -6,6 +6,7 @@ export function renderCameraPage(code: string): string {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>MoriLens</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <style>
       :root { --glass: rgba(0,0,0,.45); --border: rgba(255,255,255,.2); --hint-h: 52px; }
       html, body { margin:0; padding:0; height:100%; background:#000; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial; }

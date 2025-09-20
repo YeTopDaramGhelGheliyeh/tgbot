@@ -43,7 +43,16 @@
       "ownerUserId": 119289217,
       "kind": "online",
       "groupId": -4950946943,
-      "expiresAt": 1758497618628
+      "expiresAt": 1758497618628,
+      "shortCode": "SsS9dpQ"
+    },
+    {
+      "code": "KYU687",
+      "name": "ss",
+      "ownerUserId": 119289217,
+      "kind": "online",
+      "groupId": -4950946943,
+      "expiresAt": 1758401099583
     }
   ],
   "short": {
@@ -52,6 +61,8 @@
     "oCX414A": "https://morilens.party/lens/YCHD5E?exp=1758306796539",
     "B86WwGt": "https://morilens.party/online/JLDGW6?exp=1758494923435",
     "xyAYVDi": "https://morilens.party/lens/JLDGW6?exp=1758494923435",
-    "z4gfCmP": "https://morilens.party/online/JGQQF2?exp=1758497618628"
+    "z4gfCmP": "https://morilens.party/online/JGQQF2?exp=1758497618628",
+    "SsS9dpQ": "https://morilens.party/lens/JGQQF2?exp=1758497618628",
+    "eQBN9XQ": "https://morilens.party/online/KYU687?exp=1758401099583"
   }
 }

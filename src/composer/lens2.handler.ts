@@ -55,9 +55,15 @@ function expiryKeyboard(code: string) {
     .text('Help', HELP);
 }
 
-function detailKeyboard(code: string, current: 'short' | 'long', longUrl?: string, _shortUrl?: string) {
+function detailKeyboard(
+  code: string,
+  current: 'short' | 'long',
+  longUrl?: string,
+  _shortUrl?: string,
+  kind: 'camera' | 'online' = 'camera',
+) {
   const kb = new InlineKeyboard();
-  if (longUrl) kb.url('Open Camera', longUrl);
+  if (longUrl) kb.url(kind === 'online' ? 'Open Online Lens' : 'Open Camera', longUrl);
   kb.row();
   if (current === 'long') {
     kb.text('Show Short Link', `${TOGGLE_PREFIX}short:${code}`);
@@ -225,7 +231,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
       if (lens.expiresAt) {
         expiryLine = `Expiry ⏳: ${new Date(lens.expiresAt).toLocaleString()}`;
         remainingLine = `Remaining ⌛️: ${fmtRemaining(lens.expiresAt - Date.now())}`;
-        longUrl = lensRegistry.longUrl(lens.code, lens.expiresAt);
+        longUrl = lens.kind === 'online' ? lensRegistry.onlineUrl(lens.code, lens.expiresAt) : lensRegistry.longUrl(lens.code, lens.expiresAt);
         if (lens.shortCode) shortUrl = lensRegistry.shortUrl(lens.shortCode);
         if (!shortUrl && longUrl) {
           const { shortCode } = lensRegistry.ensureShort(longUrl);
@@ -233,8 +239,9 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
           shortUrl = lensRegistry.shortUrl(shortCode);
         }
       }
+      const heading = lens.kind === 'online' ? 'Online Lens 🎯' : 'Lens 🎯';
       const text = [
-        `Lens 🎯: ${lens.name}`,
+        `${heading}: ${lens.name}`,
         `Code 🔑: ${lens.code}`,
         `Status: ${status}`,
         groupLine,
@@ -244,7 +251,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
       ].filter(Boolean).join('\n');
 
       await ctx.answerCallbackQuery();
-      await sendOrUpdate(ctx, text, detailKeyboard(lens.code, 'long', longUrl, shortUrl));
+      await sendOrUpdate(ctx, text, detailKeyboard(lens.code, 'long', longUrl, shortUrl, lens.kind || 'camera'));
       return;
     }
 
@@ -276,7 +283,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
       ].join('\n');
 
       await ctx.answerCallbackQuery({ text: 'Expiry set' });
-      await sendOrUpdate(ctx, text, detailKeyboard(lens.code, 'long', longUrl, shortUrl));
+      await sendOrUpdate(ctx, text, detailKeyboard(lens.code, 'long', longUrl, shortUrl, lens.kind || 'camera'));
       return;
     }
 
@@ -297,8 +304,9 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
       }
 
       const firstShort = mode === 'short' && !!shortUrl;
+      const heading = lens.kind === 'online' ? 'Online Lens 🎯' : 'Lens 🎯';
       const lines: string[] = [
-        `Lens 🎯: ${lens.name}`,
+        `${heading}: ${lens.name}`,
         `Code 🔑: ${lens.code}`,
         `Status: ${lens.groupId ? (lensRegistry.isExpired(lens.code) ? 'Expired ⌛️' : 'Active ✅') : 'Not connected 🚫'}`,
         lens.groupId ? 'Group 👥: Connected' : 'Group 👥: Not connected',
@@ -313,7 +321,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
       }
       const text = lines.join('\n');
       await ctx.answerCallbackQuery();
-      await sendOrUpdate(ctx, text, detailKeyboard(code, firstShort ? 'short' : 'long', longUrl, shortUrl));
+      await sendOrUpdate(ctx, text, detailKeyboard(code, firstShort ? 'short' : 'long', longUrl, shortUrl, lens.kind || 'camera'));
       return;
     }
 

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import path from 'path';
 import { Bot, InputFile, session, webhookCallback } from 'grammy';
 import { lensRegistry } from './service/lens.service';
 import { renderCameraPage } from './service/camera.page';
@@ -87,11 +88,22 @@ logger.info('Bootstrapping bot server', {
   requestedMode: useWebhook ? 'webhook' : 'long-polling',
 });
 const app = express();
+const faviconPath = path.resolve(process.cwd(), 'assets', 'MoriLensNoBack.svg');
 app.use(express.json({ limit: '20mb' }));
 
 app.get('/health', (_req, res) => {
   logger.debug('Health check endpoint accessed');
   res.json({ status: 'ok' });
+});
+
+app.get(['/favicon.svg', '/favicon.ico'], (_req, res) => {
+  res.type('image/svg+xml');
+  res.sendFile(faviconPath, (error) => {
+    if (error) {
+      logger.error(error, 'Failed to send favicon');
+      if (!res.headersSent) res.status(500).end();
+    }
+  });
 });
 
 let webhookPath: string | undefined;
@@ -149,7 +161,7 @@ async function configureBotTransport(): Promise<void> {
 // Routes for MoriLens web and API
 
 app.get('/', (_req, res) => {
-  res.type('html').send('<!doctype html><html><head><meta charset="utf-8"><title>MoriLens</title></head><body><h3>MoriLens</h3><p>Use the bot to create a Lens and get a link.</p></body></html>');
+  res.type('html').send('<!doctype html><html><head><meta charset="utf-8"><title>MoriLens</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"></head><body><h3>MoriLens</h3><p>Use the bot to create a Lens and get a link.</p></body></html>');
 });
 
 app.get('/lens/:code', (req, res) => {

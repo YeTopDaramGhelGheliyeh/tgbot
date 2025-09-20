@@ -22,6 +22,7 @@ export function renderOnlinePage(code: string, botToken: string, groupId?: numbe
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>MoriLens Online Lens</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <style>
       :root { --bg:#0b0b0c; --card:#121215; --fg:#f5f5f5; --muted:#b9bbc2; --accent:#7c5cff; }
       html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--fg); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial; }
