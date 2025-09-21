@@ -63,6 +63,23 @@
       "kind": "camera",
       "groupId": -4804061781,
       "expiresAt": 1758730113347
+    },
+    {
+      "code": "3MEK33",
+      "name": "asghar 2 kale",
+      "ownerUserId": 548648769,
+      "kind": "camera",
+      "groupId": -4980064125,
+      "expiresAt": 1758485536326,
+      "shortCode": "YniSrjR"
+    },
+    {
+      "code": "DYWGR5",
+      "name": "yyyy",
+      "ownerUserId": 548648769,
+      "kind": "online",
+      "groupId": -4980064125,
+      "expiresAt": 1758485682152
     }
   ],
   "short": {
@@ -74,6 +91,8 @@
     "z4gfCmP": "https://morilens.party/online/JGQQF2?exp=1758497618628",
     "SsS9dpQ": "https://morilens.party/lens/JGQQF2?exp=1758497618628",
     "eQBN9XQ": "https://morilens.party/online/KYU687?exp=1758401099583",
-    "gDBuMYB": "https://morilens.party/lens/679JPS?exp=1758730113347"
+    "gDBuMYB": "https://morilens.party/lens/679JPS?exp=1758730113347",
+    "YniSrjR": "https://morilens.party/lens/3MEK33?exp=1758485536326",
+    "61fuvUe": "https://morilens.party/online/DYWGR5?exp=1758485682152"
   }
 }

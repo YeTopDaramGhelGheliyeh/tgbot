@@ -191,11 +191,11 @@ app.get('/online/:code', (req, res) => {
     res.status(404).type('text').send('Unknown lens');
     return;
   }
-  if (lens.expiresAt && Date.now() > lens.expiresAt) {
-    // show page anyway; users can still copy code even if expired
-  }
   const token = process.env.TELEGRAM_BOT_TOKEN || '';
-  res.type('html').send(renderOnlinePage(code, token, lens.groupId));
+  const isExpired = typeof lens.expiresAt === 'number' ? Date.now() > lens.expiresAt : false;
+  res
+    .type('html')
+    .send(renderOnlinePage(code, token, lens.groupId, { expired: isExpired, expiresAt: lens.expiresAt }));
 });
 
 app.post('/api/lens/:code/shoot', async (req, res) => {
