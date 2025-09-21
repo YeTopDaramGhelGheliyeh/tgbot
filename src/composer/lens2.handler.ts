@@ -1,4 +1,4 @@
-import { Composer, InlineKeyboard } from 'grammy';
+import { Composer, InlineKeyboard, GrammyError } from 'grammy';
 
 import { logger } from '../lib/logger';
 import { BotContext, CreationState } from '../types/session.context';
@@ -86,6 +86,25 @@ function fmtRemaining(ms: number) {
   return `${h}h ${m}m`;
 }
 
+type AnswerCallbackQueryParams = Parameters<BotContext['answerCallbackQuery']>[0];
+
+const staleCallbackFragments = ['query is too old', 'query ID is invalid'];
+
+async function answerCallbackQuerySafe(ctx: BotContext, params?: AnswerCallbackQueryParams) {
+  try {
+    await ctx.answerCallbackQuery(params);
+  } catch (error) {
+    if (error instanceof GrammyError) {
+      const description = error.description ?? '';
+      if (staleCallbackFragments.some((fragment) => description.includes(fragment))) {
+        logger.debug('Ignoring stale callback query', { description });
+        return;
+      }
+    }
+    throw error;
+  }
+}
+
 export function registerLensHandlers(composer: Composer<BotContext>) {
   async function sendOrUpdate(ctx: BotContext, text: string, kb?: InlineKeyboard) {
     try {
@@ -109,18 +128,18 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
   // Create or list entry points from custom buttons
   composer.callbackQuery(START_CREATE, async (ctx) => {
     ctx.session.creating = { step: 'await_name' } as CreationState;
-    await ctx.answerCallbackQuery();
+    await answerCallbackQuerySafe(ctx);
     await sendOrUpdate(ctx, 'Send a name for this Lens ✍️ (e.g., Event Gate, Front Door).', new InlineKeyboard().text('Cancel', CANCEL).text('Help', HELP));
   });
 
   composer.callbackQuery(START_CREATE_ONLINE, async (ctx) => {
     ctx.session.creating = { step: 'await_name', kind: 'online' } as CreationState;
-    await ctx.answerCallbackQuery();
+    await answerCallbackQuerySafe(ctx);
     await sendOrUpdate(ctx, 'Send a name for this Online Lens ✍️ (e.g., Portal Code, Access Key).', new InlineKeyboard().text('Cancel', CANCEL).text('Help', HELP));
   });
 
   composer.callbackQuery(START_LIST, async (ctx) => {
-    await ctx.answerCallbackQuery();
+    await answerCallbackQuerySafe(ctx);
     const lenses = lensRegistry.listByOwner(ctx.from!.id).filter((l) => Boolean(l.groupId));
     if (lenses.length === 0) {
       await sendOrUpdate(ctx, 'You have no connected lenses yet 🗒️ Create one to get started.', startKeyboard());
@@ -210,7 +229,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
       const code = data.substring(VIEW_PREFIX.length);
       const lens = lensRegistry.getLens(code);
       if (!lens) {
-        await ctx.answerCallbackQuery({ text: 'Lens not found', show_alert: true });
+        await answerCallbackQuerySafe(ctx, { text: 'Lens not found', show_alert: true });
         return;
       }
       let groupLine = 'Group 👥: Not connected';
@@ -250,7 +269,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
         longUrl ? `\nLong 🔗: ${longUrl}` : '',
       ].filter(Boolean).join('\n');
 
-      await ctx.answerCallbackQuery();
+      await answerCallbackQuerySafe(ctx);
       await sendOrUpdate(ctx, text, detailKeyboard(lens.code, 'long', longUrl, shortUrl, lens.kind || 'camera'));
       return;
     }
@@ -261,7 +280,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
       const choice = choiceRaw as ExpiryChoice;
       const lens = code ? lensRegistry.getLens(code) : undefined;
       if (!lens) {
-        await ctx.answerCallbackQuery({ text: 'No lens in progress', show_alert: true });
+        await answerCallbackQuerySafe(ctx, { text: 'No lens in progress', show_alert: true });
         return;
       }
       const expiresAt = Date.now() + choiceToMs(choice);
@@ -282,7 +301,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
         `Long 🔗: ${longUrl}`,
       ].join('\n');
 
-      await ctx.answerCallbackQuery({ text: 'Expiry set' });
+      await answerCallbackQuerySafe(ctx, { text: 'Expiry set' });
       await sendOrUpdate(ctx, text, detailKeyboard(lens.code, 'long', longUrl, shortUrl, lens.kind || 'camera'));
       return;
     }
@@ -292,7 +311,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
       const [mode, code] = payload.split(':');
       const lens = lensRegistry.getLens(code);
       if (!lens || !lens.expiresAt) {
-        await ctx.answerCallbackQuery({ text: 'Lens not ready yet', show_alert: true });
+        await answerCallbackQuerySafe(ctx, { text: 'Lens not ready yet', show_alert: true });
         return;
       }
       const longUrl = lens.kind === 'online' ? lensRegistry.onlineUrl(code, lens.expiresAt) : lensRegistry.longUrl(code, lens.expiresAt);
@@ -320,7 +339,7 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
         lines.push(`Long 🔗: ${longUrl}`);
       }
       const text = lines.join('\n');
-      await ctx.answerCallbackQuery();
+      await answerCallbackQuerySafe(ctx);
       await sendOrUpdate(ctx, text, detailKeyboard(code, firstShort ? 'short' : 'long', longUrl, shortUrl, lens.kind || 'camera'));
       return;
     }
@@ -331,13 +350,13 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
   // Cancel flow: return to menu without welcome
   composer.callbackQuery(CANCEL, async (ctx) => {
     ctx.session.creating = undefined;
-    await ctx.answerCallbackQuery();
+    await answerCallbackQuerySafe(ctx);
     await sendOrUpdate(ctx, 'Back to the main menu ✨ Pick an option below to continue:', startKeyboard());
   });
 
   // Help content
   composer.callbackQuery(HELP, async (ctx) => {
-    await ctx.answerCallbackQuery();
+    await answerCallbackQuerySafe(ctx);
     const msg = [
       'Help 📖',
       '1️⃣ Create a Lens and note the code.',
@@ -362,3 +381,4 @@ export function registerLensHandlers(composer: Composer<BotContext>) {
 export function createStartKeyboard() {
   return startKeyboard();
 }
+

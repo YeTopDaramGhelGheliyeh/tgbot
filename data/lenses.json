@@ -26,7 +26,8 @@
       "name": "Sina",
       "ownerUserId": 119289217,
       "groupId": -4950946943,
-      "expiresAt": 1758306796539
+      "expiresAt": 1758306796539,
+      "shortCode": "oCX414A"
     },
     {
       "code": "JLDGW6",
@@ -52,7 +53,16 @@
       "ownerUserId": 119289217,
       "kind": "online",
       "groupId": -4950946943,
-      "expiresAt": 1758401099583
+      "expiresAt": 1758401099583,
+      "shortCode": "eQBN9XQ"
+    },
+    {
+      "code": "679JPS",
+      "name": "Def",
+      "ownerUserId": 220528895,
+      "kind": "camera",
+      "groupId": -4804061781,
+      "expiresAt": 1758730113347
     }
   ],
   "short": {
@@ -63,6 +73,7 @@
     "xyAYVDi": "https://morilens.party/lens/JLDGW6?exp=1758494923435",
     "z4gfCmP": "https://morilens.party/online/JGQQF2?exp=1758497618628",
     "SsS9dpQ": "https://morilens.party/lens/JGQQF2?exp=1758497618628",
-    "eQBN9XQ": "https://morilens.party/online/KYU687?exp=1758401099583"
+    "eQBN9XQ": "https://morilens.party/online/KYU687?exp=1758401099583",
+    "gDBuMYB": "https://morilens.party/lens/679JPS?exp=1758730113347"
   }
 }
